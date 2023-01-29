@@ -1,0 +1,26 @@
+name: Docker Image CI
+
+on:
+  push:
+    branches: [ dev ]
+  pull_request:
+    branches: [ main ]
+
+jobs:
+
+  build:
+
+    runs-on: [self-hosted]
+
+    steps:
+      - uses: actions/checkout@v2
+      - name: Build the Docker image
+        run: |
+          ACCOUNT_ID="553885929720"
+          REGION="us-east-1"
+          IMAGE_NAME="${ACCOUNT_ID}.dkr.ecr.${REGION}.amazonaws.com/${GITHUB_REPOSITORY#*/}:${GITHUB_SHA}"
+          aws ecr get-login-password --region ${REGION} |docker login --username AWS --password-stdin  ${ACCOUNT_ID}.dkr.ecr.${REGION}.amazonaws.com
+          aws ecr --region ${REGION} describe-repositories --repository-names ${GITHUB_REPOSITORY#*/} || aws ecr --region ${REGION} create-repository --repository-name ${GITHUB_REPOSITORY#*/}
+          aws ecr set-repository-policy  --repository-name ${GITHUB_REPOSITORY#*/} --policy-text file:///home/ec2-user/ec2-access-policy-policy.json
+          docker build --build-arg profile=prod --build-arg GIT_TOKEN=${{ secrets.GO_MODULES_TOKEN }} . -t $IMAGE_NAME
+          docker push $IMAGE_NAME
